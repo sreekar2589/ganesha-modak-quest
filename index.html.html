@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ganesha's Modak Quest</title>
+<style>
+  *{box-sizing:border-box} body{margin:0;background:#171326;color:#fff;font-family:system-ui,Segoe UI,sans-serif;display:grid;place-items:center;min-height:100vh}
+  #wrap{width:min(960px,100vw);padding:12px} canvas{width:100%;height:auto;display:block;border-radius:18px;background:#231b3c;box-shadow:0 12px 40px #0008}
+  .bar{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 2px;font-weight:700}
+  button{border:0;border-radius:10px;padding:9px 14px;font-weight:800;cursor:pointer}
+  #status{color:#ffd166}
+  .hint{text-align:center;color:#c9c3dc;font-size:13px;margin-top:7px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div class="bar"><span>🐘 Ganesha's Modak Quest</span><span id="status">Modaks: 0 / 10</span><button id="restart">Restart</button></div>
+  <canvas id="game" width="900" height="520" aria-label="Ganesha themed game"></canvas>
+  <div class="hint">Move with WASD or arrow keys • Collect 10 modaks • Avoid the temple obstacles • Reach the glowing shrine</div>
+</div>
+<script>
+(() => {
+const c=document.getElementById('game'), ctx=c.getContext('2d'), status=document.getElementById('status');
+const W=c.width,H=c.height;
+const keys={}; let running=true, win=false, score=0, t=0, last=0;
+const player={x:90,y:260,r:22,s:250};
+let modaks=[], rocks=[], sparks=[];
+const shrine={x:820,y:260,r:54};
+
+function rand(a,b){return a+Math.random()*(b-a)}
+function reset(){
+  player.x=90; player.y=260; score=0; running=true; win=false; t=0; sparks=[];
+  modaks=[]; rocks=[];
+  const spots=[[220,120],[360,390],[510,135],[660,390],[760,155],[270,275],[450,300],[610,245],[740,320],[145,420]];
+  spots.forEach(([x,y])=>modaks.push({x,y,r:12,t:Math.random()*6}));
+  for(let i=0;i<7;i++) rocks.push({x:rand(180,720),y:rand(80,440),r:rand(13,22),vx:rand(-40,40),vy:rand(-30,30)});
+  updateStatus();
+}
+function updateStatus(){status.textContent=`Modaks: ${score} / 10${win?' • YOU WON!':(!running?' • TRY AGAIN':'' )}`}
+addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase()))e.preventDefault(); if(e.key==='r')reset()});
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+document.getElementById('restart').onclick=reset;
+
+function circleHit(a,b){let dx=a.x-b.x,dy=a.y-b.y;return Math.hypot(dx,dy)<a.r+b.r}
+function burst(x,y,n=12){for(let i=0;i<n;i++)sparks.push({x,y,vx:rand(-120,120),vy:rand(-120,120),life:rand(.4,.9)})}
+
+function update(dt){
+ if(!running)return;
+ t+=dt;
+ let dx=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0);
+ let dy=(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0);
+ if(dx||dy){let m=Math.hypot(dx,dy);player.x+=dx/m*player.s*dt;player.y+=dy/m*player.s*dt}
+ player.x=Math.max(32,Math.min(W-32,player.x));player.y=Math.max(68,Math.min(H-32,player.y));
+ for(const r of rocks){r.x+=r.vx*dt;r.y+=r.vy*dt;if(r.x<150||r.x>760)r.vx*=-1;if(r.y<80||r.y>450)r.vy*=-1;if(circleHit(player,r)){running=false;burst(player.x,player.y,22);updateStatus()}}
+ for(const m of modaks){m.t+=dt;if(m.x&&circleHit(player,m)){m.x=-999;score++;burst(player.x,player.y,10);updateStatus()}}
+ if(score===10&&Math.hypot(player.x-shrine.x,player.y-shrine.y)<shrine.r+player.r){win=true;running=false;burst(shrine.x,shrine.y,35);updateStatus()}
+ sparks.forEach(s=>{s.x+=s.vx*dt;s.y+=s.vy*dt;s.life-=dt});sparks=sparks.filter(s=>s.life>0);
+}
+function draw(){
+ ctx.clearRect(0,0,W,H);
+ // background
+ const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#302050');g.addColorStop(1,'#151024');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+ // moon + decorative lamps
+ ctx.fillStyle='#ffd166';ctx.beginPath();ctx.arc(760,95,28,0,7);ctx.fill();
+ for(let x=35;x<W;x+=72){ctx.fillStyle='#6f5a94';ctx.fillRect(x,58,2,H-80)}
+ // ground
+ ctx.fillStyle='#3b2b52';ctx.fillRect(0,62,W,H-62);
+ // path
+ ctx.strokeStyle='#60456e';ctx.lineWidth=70;ctx.beginPath();ctx.moveTo(40,260);ctx.quadraticCurveTo(420,90,850,260);ctx.stroke();
+ ctx.strokeStyle='#8a6a83';ctx.lineWidth=2;ctx.setLineDash([10,12]);ctx.beginPath();ctx.moveTo(40,260);ctx.quadraticCurveTo(420,90,850,260);ctx.stroke();ctx.setLineDash([]);
+ // shrine
+ ctx.save();ctx.translate(shrine.x,shrine.y);
+ ctx.shadowBlur=25;ctx.shadowColor='#ffd166';ctx.fillStyle='#ffd166';ctx.globalAlpha=.18;ctx.beginPath();ctx.arc(0,0,shrine.r+10,0,7);ctx.fill();ctx.globalAlpha=1;ctx.shadowBlur=0;
+ ctx.fillStyle='#9a6b3f';ctx.fillRect(-34,8,68,42);ctx.fillStyle='#e7a74f';ctx.beginPath();ctx.moveTo(-44,8);ctx.lineTo(0,-38);ctx.lineTo(44,8);ctx.closePath();ctx.fill();
+ ctx.fillStyle='#ffd166';ctx.font='30px sans-serif';ctx.textAlign='center';ctx.fillText('ॐ',0,38);ctx.restore();
+ // modaks
+ for(const m of modaks)if(m.x>0){let bob=Math.sin(m.t*3)*3;ctx.save();ctx.translate(m.x,m.y+bob);ctx.fillStyle='#f6b73c';ctx.beginPath();ctx.moveTo(0,-15);ctx.lineTo(14,7);ctx.quadraticCurveTo(0,18,-14,7);ctx.closePath();ctx.fill();ctx.fillStyle='#fff0b5';ctx.beginPath();ctx.arc(0,-4,3,0,7);ctx.fill();ctx.restore()}
+ // rocks
+ for(const r of rocks){ctx.fillStyle='#80758f';ctx.beginPath();ctx.arc(r.x,r.y,r.r,0,7);ctx.fill();ctx.fillStyle='#aaa0b6';ctx.beginPath();ctx.arc(r.x-5,r.y-5,r.r/3,0,7);ctx.fill()}
+ // player: stylized Ganesha-inspired elephant hero
+ ctx.save();ctx.translate(player.x,player.y);
+ ctx.fillStyle='#d98b58';ctx.beginPath();ctx.arc(0,0,player.r,0,7);ctx.fill();
+ ctx.fillStyle='#efad73';ctx.beginPath();ctx.arc(-18,0,10,0,7);ctx.arc(18,0,10,0,7);ctx.fill();
+ ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(-8,-5,4,0,7);ctx.arc(8,-5,4,0,7);ctx.fill();ctx.fillStyle='#251a32';ctx.beginPath();ctx.arc(-8,-5,2,0,7);ctx.arc(8,-5,2,0,7);ctx.fill();
+ ctx.strokeStyle='#efad73';ctx.lineWidth=7;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(0,4);ctx.quadraticCurveTo(12,12,4,20);ctx.stroke();
+ ctx.fillStyle='#ffd166';ctx.fillRect(-4,-23,8,5);ctx.restore();
+ // sparks
+ for(const s of sparks){ctx.globalAlpha=Math.max(0,s.life);ctx.fillStyle='#ffd166';ctx.fillRect(s.x,s.y,4,4);ctx.globalAlpha=1}
+ // overlays
+ if(!running){ctx.fillStyle='#0009';ctx.fillRect(0,0,W,H);ctx.textAlign='center';ctx.fillStyle='#fff';ctx.font='bold 38px system-ui';ctx.fillText(win?'Ganpati Bappa Morya! 🎉':'Oh no! Try again',W/2,H/2-15);ctx.font='18px system-ui';ctx.fillStyle='#ffd166';ctx.fillText(win?'You collected every modak and reached the shrine.':'A temple obstacle got you. Press Restart or R.',W/2,H/2+25)}
+}
+function loop(ts){let dt=Math.min(.033,(ts-last)/1000||0);last=ts;update(dt);draw();requestAnimationFrame(loop)}
+reset();requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
